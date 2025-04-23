@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Prayer Timings</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #000;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    h1, h3 {
+      color: #fff;
+    }
+
+    .input-box {
+      margin: 20px 0;
+    }
+
+    input {
+      padding: 10px;
+      width: 220px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      font-size: 16px;
+      background: #111;
+      color: #fff;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      background-color: #fff;
+      color: #000;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-left: 10px;
+    }
+
+    .timings {
+      background: #111;
+      border-radius: 10px;
+      padding: 25px;
+      width: 100%;
+      max-width: 400px;
+      margin-top: 20px;
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+    }
+
+    .timing-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .no-prayer {
+      color: #f00;
+      font-weight: bold;
+    }
+
+    .tahajjud {
+      color: #0f0;
+      font-weight: bold;
+    }
+
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .footer img.logo {
+      width: 100px;
+      margin-bottom: 10px;
+    }
+
+    .footer a img.insta {
+      width: 30px;
+      margin-top: 10px;
+      transition: transform 0.3s ease;
+    }
+
+    .footer a img.insta:hover {
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>Prayer Timings</h1>
+  <p id="location-status">Detecting location...</p>
+
+  <div class="input-box">
+    <input type="text" id="city" placeholder="Or enter city name">
+    <button onclick="getByCity()">Get Timings</button>
+  </div>
+
+  <div class="timings" id="timingBox"></div>
+
+<footer style="text-align: center; margin-top: 30px;">
+  <p>Made by <strong>@Prodevopz</strong></p>
+  <a href="https://www.instagram.com/prodevopz" target="_blank" style="color: white; font-size: 24px;">
+    <i class="fab fa-instagram"></i>
+  </a>
+</footer>
+
+ <script>
+  function formatTimeLabel(label) {
+    const noPrayerTimes = ['Sunrise', 'Sunset', 'Midnight', 'Imsak'];
+    return noPrayerTimes.includes(label) ? `<span class="no-prayer">${label}</span>` : label;
+  }
+
+  function calculateTahajjudTime(isha, fajr) {
+    const toMinutes = time => {
+      let [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const toTime = mins => {
+      let h = Math.floor(mins / 60) % 24;
+      let m = mins % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    };
+
+    const ishaMins = toMinutes(isha);
+    const fajrMins = toMinutes(fajr) + (toMinutes(fajr) < ishaMins ? 1440 : 0);
+    const nightDuration = fajrMins - ishaMins;
+    const tahajjudStart = ishaMins + nightDuration * (2 / 3);
+    const tahajjudEnd = fajrMins;
+
+    return {
+      start: toTime(tahajjudStart),
+      end: toTime(tahajjudEnd % 1440)
+    };
+  }
+
+  async function fetchTimings(apiUrl, cityName = '') {
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+    const times = data.data.timings;
+    const date = data.data.date.readable;
+    const timezone = data.data.meta.timezone;
+    const city = cityName || data.data.meta.address || data.data.meta.timezone.split('/').pop();
+
+    const tahajjud = calculateTahajjudTime(times.Isha, times.Fajr);
+
+    let html = `<h3>${date}</h3>
+                <p><strong>City:</strong> ${city}</p>
+                <p><strong>Timezone:</strong> ${timezone}</p>`;
+
+    for (let key in times) {
+      html += `
+        <div class="timing-row">
+          <div>${formatTimeLabel(key)}</div>
+          <div>${times[key]}</div>
+        </div>`;
+    }
+
+    html += `
+      <div class="timing-row">
+        <div><span class="tahajjud">Tahajjud</span></div>
+        <div><span class="tahajjud">${tahajjud.start} - ${tahajjud.end}</span></div>
+      </div>`;
+
+    document.getElementById("timingBox").innerHTML = html;
+  }
+
+  function getByCity() {
+    const city = document.getElementById("city").value.trim();
+    if (!city) return alert("Please enter a city name.");
+    const api = `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=India&method=2`;
+    fetchTimings(api, city);
+  }
+
+  function autoDetectLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      // Fetch city name from OpenStreetMap
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+      const geoData = await geoRes.json();
+      const city = geoData.address.city || geoData.address.town || geoData.address.village || "Your City";
+
+      document.getElementById("location-status").textContent = "Location: " + city;
+
+      const api = `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`;
+      fetchTimings(api, city);
+    }, () => {
+      document.getElementById("location-status").textContent = "Could not detect location. Enter a city above.";
+    });
+  } else {
+    document.getElementById("location-status").textContent = "Geolocation not supported.";
+  }
+}
+  window.onload = autoDetectLocation;
+</script>
+</body>
+</html>
