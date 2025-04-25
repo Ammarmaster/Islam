@@ -109,6 +109,13 @@
   </footer>
 
   <script>
+    function to12Hour(time) {
+      let [h, m] = time.split(':').map(Number);
+      const suffix = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h}:${m.toString().padStart(2, '0')} ${suffix}`;
+    }
+
     function getCurrentTimeInMinutes() {
       const now = new Date();
       return now.getHours() * 60 + now.getMinutes();
@@ -139,7 +146,9 @@
       const toTime = mins => {
         let h = Math.floor(mins / 60) % 24;
         let m = mins % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        const suffix = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        return `${h}:${m.toString().padStart(2, '0')} ${suffix}`;
       };
 
       const ishaMins = toMinutes(isha);
@@ -154,40 +163,42 @@
       };
     }
 
-    function to12Hour(time24) {
-  let [hour, minute] = time24.split(':').map(Number);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  hour = hour % 12 || 12;
-  return `${hour}:${minute.toString().padStart(2, '0')} ${ampm}`;
-}
+    async function fetchTimings(apiUrl, cityName = '') {
+      const res = await fetch(apiUrl);
+      const data = await res.json();
+      const times = data.data.timings;
+      const date = data.data.date.readable;
+      const next = getNextPrayer(times);
+      const tahajjud = calculateTahajjudTime(times.Isha, times.Fajr);
 
-async function fetchTimings(apiUrl, cityName = '') {
-  const res = await fetch(apiUrl);
-  const data = await res.json();
-  const times = data.data.timings;
-  const date = data.data.date.readable;
-  const next = getNextPrayer(times);
-  const tahajjud = calculateTahajjudTime(times.Isha, times.Fajr);
+      let html = `<p>${date}</p><p><strong>${cityName}</strong></p>`;
 
-  let html = `<p>${date}</p><p><strong>${cityName}</strong></p>`;
+      // Highlighted next prayer first
+      if (next && times[next]) {
+        html += `
+          <div class="prayer-time highlight">
+            <div>${next}</div>
+            <div>${to12Hour(times[next])}</div>
+          </div>`;
+      }
 
-  for (let key in times) {
-    const highlight = key === next ? 'highlight' : '';
-    html += `
-      <div class="prayer-time ${highlight}">
-        <div>${key}</div>
-        <div>${to12Hour(times[key])}</div>
-      </div>`;
-  }
+      for (let key in times) {
+        if (key === next) continue;
+        html += `
+          <div class="prayer-time">
+            <div>${key}</div>
+            <div>${to12Hour(times[key])}</div>
+          </div>`;
+      }
 
-  html += `
-    <div class="prayer-time tahajjud">
-      <div>Tahajjud</div>
-      <div>${to12Hour(tahajjud.start)} - ${to12Hour(tahajjud.end)}</div>
-    </div>`;
+      html += `
+        <div class="prayer-time tahajjud">
+          <div>Tahajjud</div>
+          <div>${tahajjud.start} - ${tahajjud.end}</div>
+        </div>`;
 
-  document.getElementById("timingBox").innerHTML = html;
-}
+      document.getElementById("timingBox").innerHTML = html;
+    }
 
     function getByCity() {
       const city = document.getElementById("city").value.trim();
